@@ -1,10 +1,11 @@
 // ----------------------------------------------------//
 // Se crean las instancias de las librerias a utilizar //
 // ----------------------------------------------------//
-try{
+
   var modbus = require('jsmodbus');
   var fs = require('fs');
-  var PubNub = require('pubnub');
+  var httpClient = require('node-rest-client').Client;
+  var clientHttp = new httpClient();
 //Asignar host, puerto y otros par ametros al cliente Modbus
 var client = modbus.client.tcp.complete({
     'host': "192.168.20.29",
@@ -29,7 +30,7 @@ var actualShrinkwrapper=0,stateShrinkwrapper=0;
 var Paletizer,ctPaletizer=0,speedTempPaletizer=0,secPaletizer=0,stopCountPaletizer=0,flagStopPaletizer=0,flagPrintPaletizer=0,speedPaletizer=0,timePaletizer=0;
 var actualPaletizer=0,statePaletizer=0;
 var Barcode,secBarcode=0;
-var secEOL=0,secPubNub=0;
+var secEOL=0,secPubNub=5*60;
 var publishConfig;
 var files = fs.readdirSync("/home/oee/Pulse/BYD_L10_LOGS/"); //Leer documentos
 var text2send=[];//Vector a enviar
@@ -48,15 +49,16 @@ function idle(){
     }
   }
 }
-pubnub = new PubNub({
-  publishKey : "pub-c-82cf38a9-061a-43e2-8a0f-21a6770ab473",
-  subscribeKey : "sub-c-e14aa146-bab0-11e8-b6ef-c2e67adadb66",
-  uuid : "bydgoszcz-L10-monitoring"
-});
+
+
+clientHttp.registerMethod("postMethod", "http://35.160.68.187:23000/heartbeatLine/Byd", "POST");
 
 function senderData(){
-  pubnub.publish(publishConfig, function(status, response) {
-});}
+  clientHttp.methods.postMethod(publishConfig, function (data, response) {
+      // parsed response body as js object
+      console.log(data.toString());
+  });
+}
 // --------------------------------------------------------- //
 //Función que realiza las instrucciones de lectura de datos  //
 // --------------------------------------------------------- //
@@ -65,12 +67,12 @@ var DoRead = function (){
     idle();
     secPubNub=0;
     publishConfig = {
-      channel : "BYD_Monitor",
-      message : {
-            line: "10",
-            tt: Date.now(),
-            machines: text2send
-          }
+      headers: { "Content-Type": "application/json" },
+      data: {              message : {
+                          line: "10",
+                          tt: Date.now(),
+                          machines:text2send
+                        }}
     };
     senderData();
   }else{
@@ -626,6 +628,7 @@ var switchData = function (num1,num2){
 var stop = function () {
     ///This function clean data
     clearInterval(intId);
+    process.exit(0);
 };
 
 var shutdown = function () {
@@ -656,7 +659,3 @@ client.on('close', function () {
     fs.appendFileSync("error.log","ID 2: "+Date.now()+": "+'Client closed, stopping interval.'+"\n");
     stop();
 });
-
-}catch(err){
-    fs.appendFileSync("error.log","ID 3: "+Date.now()+": "+err+"\n");
-}
